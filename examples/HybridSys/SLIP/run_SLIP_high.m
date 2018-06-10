@@ -52,7 +52,7 @@ params.domain{3} = ...
 %-------------------------- Parameters for OCP ---------------------------%
 %-------------------------------------------------------------------------%
 T = 2.5;            % time horizon
-d = 4;              % degree of relaxation
+d = 6;              % degree of relaxation
 nmodes = 3;         % number of modes
 
 % Solver options
@@ -143,7 +143,7 @@ h{3} = -y( 3 ) * T;                     % h = -y
 H{3} = 0;
 
 % Initial condition and Target Set
-x0{3} = [ -1; 0.3; 0.20; 0 ];
+x0{3} = [ -0.5; 0.3; 0.20; 0 ];
 
 % Target set is the entire space
 hXT{1} = hX{1};
