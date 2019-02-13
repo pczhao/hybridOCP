@@ -52,7 +52,7 @@ params.domain{3} = ...
 %-------------------------- Parameters for OCP ---------------------------%
 %-------------------------------------------------------------------------%
 T = 2.5;            % time horizon
-d = 6;              % degree of relaxation
+d = 4;              % degree of relaxation
 nmodes = 3;         % number of modes
 
 % Solver options
@@ -104,7 +104,7 @@ hU{1} = u{1}*(1 - u{1});
 R{1,2} = Reset_S2F_Approx(y,params);    % reset map
 sX{1,2} = ...                           % guard
         [ -(l0 - y(1))^2;                   % l = l0
-          y(2);                             % l_dot > 0
+          y(2) - 1e-3;                      % l_dot > 1e-3
           hX{1};                            % G \subset X
           domain{2}(:,2) - R{1,2};          % Image(R(i,j)) \subset X_j
           R{1,2} - domain{2}(:,1) ];
@@ -135,6 +135,7 @@ hU{3} = u{3}*(1 - u{3});
 R{3,1} = Reset_F2S_Approx(y,params);    % reset map
 sX{3,1} = ...                           % guard
         [ -(y(3) - yR)^2;                   % y = yR
+          -y(4) - 1e-3;                     % ydot <= -1e-3
           hX{3};                          	% G \subset X
           domain{1}(:,2) - R{3,1};      	% Image(R(i,j)) \subset X_j
           R{3,1} - domain{1}(:,1) ];
@@ -146,18 +147,19 @@ H{3} = 0;
 x0{3} = [ -0.5; 0.3; 0.20; 0 ];
 
 % Target set is the entire space
-hXT{1} = hX{1};
-hXT{2} = hX{2};
-hXT{3} = hX{3};
+hXT{1} = [hX{1}; l0 - 1e-3 - x{1}(1)];      % X1 \cap {l <= l0-1e-3}
+hXT{2} = [hX{2}; x{2}(4) - 1e-3];           % X2 \cap {ydot >= 1e-3}
+hXT{3} = [hX{3}; x{3}(3) - yR - 1e-3];      % X3 \cap {y >= yR + 1e-3}
 
 %-------------------------------------------------------------------------%
 %-------------------------------- Solve ----------------------------------%
 %-------------------------------------------------------------------------%
 [out] = HybridOCPDualSolver(t,x,u,f,g,hX,hU,sX,R,x0,hXT,h,H,d,options);
-
+disp(['Computation time = ' num2str(out.time)]);
 disp(['LMI ' int2str(d) ' lower bound = ' num2str(out.pval)]);
 
 %-------------------------------------------------------------------------%
 %-------------------------------- PLot -----------------------------------%
 %-------------------------------------------------------------------------%
 PlotRelaxedControl;
+disp(['Cost from simulation = ' num2str(cost)]);

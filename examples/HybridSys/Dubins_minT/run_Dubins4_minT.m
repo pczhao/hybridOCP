@@ -1,4 +1,4 @@
-% Hybridized Dubins car with 4 modes: minimum time problem
+% Hybridized Dubins car with 4 modes: LQR problem
 % 
 % State variables: [x, y, theta]'   in [-1,1]x[-1,1]x[-pi/2,pi/2]
 % Input: [ V, omega ]'              in [0,1]x[-1,1]
@@ -14,8 +14,10 @@
 % | 3 | 4 |
 % ---------
 % 
-% Trajectory starts at (-0.8,0.8,0) in mode 1, and arrives at (0.5,-0.2,0)
-% in mode 4, in minimum time.
+% Trajectory starts at (-0.8,0.8,0) in mode 1, and goes towards a point
+% (0.5,-0.2) while keeping control effort relatively small.
+% i.e., h(t,x,u) = (x_1-0.5)^2 + (x_2+0.2)^2 + u_1^2 + u_2^2
+%       H = 0
 % 
 
 clear;
@@ -44,6 +46,7 @@ h = cell( nmodes, 1 );
 H = cell( nmodes, 1 );
 
 x0{1} = [ -0.8; 0.8; 0 ];
+xref = [ 0.5; -0.2; 0 ];
 
 % =============================== Dynamics ===============================
 % -------  Mode 1 --------
@@ -74,50 +77,73 @@ g{4} = g{1};
 % ======================== Domains and transitions =======================
 % ----------- Mode 1 -----------
 y = x{1};
-hX{1} = [ -y(1) * (1+y(1));         % X_1 = [-1,0] x [0,1] x [-pi/2,pi/2]
-          y(2) * (1-y(2));
-          (pi/2)^2 - y(3).^2 ];
-hU{1} = [ ua(1) * (1 - ua(1));      % U_1 = [0,1] x [-1,1]
-          1 - ua(2)^2 ];
+hX{1} = [ ...
+    -y(1) * (1+y(1));               % X_1 = [-1,0] x [0,1] x [-pi/2,pi/2]
+    y(2) * (1-y(2));
+    (pi/2)^2 - y(3)^2 ];
+hU{1} = [ ...
+    (1 - ua(1));                    % U_1 = [1e-3,1] x [-1,1]
+    ua(1) - 1e-3;
+    1 - ua(2)^2 ];
 % Transition 1->2
-sX{1,2} = [ - y(1)^2;               % S_12 = {0} x [0,1] x [-pi/2,pi/2]
-            hX{1} ];
-R{1,2} = x{1};                      % R_12 = Identity
+sX{1,2} = [ ...
+    - y(1)^2;                       % S_12 = {0} x [1e-3,1] x [-pi/2+1e-3,pi/2-1e-3]
+    1 - y(2);
+    y(2) - 1e-3;
+    (pi/2-1e-3)^2 - y(3)^2 ];
+R{1,2} = y;                         % R_12 = Identity
 % Transition 1->3
-sX{1,3} = [ - y(2)^2;               % S_13 = [-1,0] x {0} x [-pi/2,pi/2]
-            hX{1} ];
+sX{1,3} = [ ...
+    - y(2)^2;                       % S_13 = [-1,-1e-3] x {0} x [-pi/2,pi/2]\[-1e-3,1e-3]
+    -1e-3 - y(1);
+    y(1) + 1;
+    (pi/2)^2 - y(3)^2;
+    y(3)^2 - 1e-6 ];
 R{1,3} = y;                         % R_13 = Identity
 
 % ----------- Mode 2 -----------
 y = x{2};
-hX{2} = [ y(1) * (1-y(1));          % X_2 = [0,1] x [0,1] x [-pi/2,pi/2]
-          y(2) * (1-y(2));
-          (pi/2)^2 - y(3)^2 ];
-hU{2} = [ ua(1) * (1 - ua(1));      % U_2 = [0,1] x [-1,1]
-          1 - ua(2)^2 ];
+hX{2} = [ ...
+    y(1) * (1-y(1));                % X_2 = [0,1] x [0,1] x [-pi/2,pi/2]
+    y(2) * (1-y(2));
+    (pi/2)^2 - y(3)^2 ];
+hU{2} = [ ...
+    (1 - ua(1));                    % U_2 = [1e-3,1] x [-1,1]
+    ua(1) - 1e-3;
+    1 - ua(2)^2 ];
 % Transition 2->4
-sX{2,4} = [ - y(2)^2;               % S_24 = [0,1] x {0} x [-pi/2,pi/2]
-            hX{2} ];
+sX{2,4} = [ ...
+    - y(2)^2;                       % S_24 = [0,1] x {0} x [-pi/2,pi/2]\[-1e-3,1e-3]
+    hX{2};
+    y(3)^2 - 1e-6 ];
 R{2,4} = y;                         % R_24 = Identity
 
 % ----------- Mode 3 -----------
 y = x{3};
-hX{3} = [ - y(1) * (y(1)+1);        % X_3 = [-1,0] x [-1,0] x [-pi/2,pi/2]
-          - y(2) * (y(2)+1);
-          (pi/2)^2 - y(3)^2 ];
-hU{3} = [ ua(1) * (1 - ua(1));      % U_3 = [0,1] x [-1,1]
-          1 - ua(2)^2 ];
+hX{3} = [ ...
+    - y(1) * (y(1)+1);              % X_3 = [-1,0] x [-1,0] x [-pi/2,pi/2]
+    - y(2) * (y(2)+1);
+    (pi/2)^2 - y(3)^2 ];
+hU{3} = [ ...
+    (1 - ua(1));                    % U_3 = [1e-3,1] x [-1,1]
+    ua(1) - 1e-3;
+    1 - ua(2)^2 ];
 % Transition 3->4
-sX{3,4} = [ -y(1)^2;                % S_34 = {0} x [-1,0] x [-pi/2,pi/2]
-            hX{3} ];
+sX{3,4} = [ ...
+    -y(1)^2;                        % S_34 = {0} x [-1,0] x [-pi/2+1e-3,pi/2-1e-3]
+    y(2) * (y(2) + 1)
+    (pi/2-1e-3)^2 - y(3)^2 ];
 R{3,4} = y;                         % R_24 = Identity
 
 % ----------- Mode 4 -----------
-hX{4} = [ y(1) * (1-y(1));          % X_4 = [0,1] x [-1,0] x [-pi/2,pi/2]
-          -y(2)*(y(2)+1);
-          (pi/2)^2 - y(3)^2 ];
-hU{4} = [ ua(1) * (1 - ua(1));      % U_4 = [0,1] x [-1,1]
-          1 - ua(2)^2 ];
+hX{4} = [ ...
+    y(1) * (1-y(1));                % X_4 = [0,1] x [-1,0] x [-pi/2,pi/2]
+    -y(2)*(y(2)+1);
+    (pi/2)^2 - y(3)^2 ];
+hU{4} = [ ...
+    (1 - ua(1));                    % U_4 = [1e-3,1] x [-1,1]
+    ua(1) - 1e-3;
+    1 - ua(2)^2 ];
 
 % ===================== Cost functions and target set ====================
 h{1} = 1;
@@ -150,12 +176,15 @@ disp(['LMI ' int2str(d) ' lower bound = ' num2str(pval)]);
 %% Plot
 % trajectory
 figure;
+hold on;
+plot([0,0],[-1,1],'k');
+plot([-1,1],[0,0],'k');
 if options.withInputs
-    J = @(~,~) 1;
+    J = @(xx,uu) (xx(1)-0.5)^2 + (xx(2)+0.2)^2 + uu(1)^2 + uu(2)^2;
+    ode_options = odeset('Events',@EventFcn);
     [tval,xval] = ode45( @(tt,xx) T*Dubins_4MEq( tt, xx, out.u, J, [t;xa] ), ...
-                         [0,out.pval], [x0{1};0] );
-    plot(xval(:,1), xval(:,2));
-    axis equal
+                         [0,out.pval], [x0{1};0], ode_options );
+    plot(xval(:,1), xval(:,2), 'LineWidth', 2);
     xlim([-1,1]);
     ylim([-1,1]);
     hold on;
@@ -163,7 +192,7 @@ if options.withInputs
     plot(0.5,-0.2,'rx');
 end 
 
-% control
+% u
 uval = zeros( length(tval), 2 );
 for i = 1 : length(tval)
     tt = tval(i);
@@ -182,9 +211,9 @@ for i = 1 : length(tval)
         uval(i,2) = double( subs(out.u{4,2}, [t;xa], [tt;xx]) );
     end
 end
-% Saturation
-uval(uval>1) = 1;
+% Saturate u
 uval(uval<-1) = -1;
+uval(uval>1) = 1;
 
 figure;
 subplot(1,2,1);

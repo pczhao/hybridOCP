@@ -26,7 +26,7 @@ plot( h_2d, x_hist, y_hist, '-', 'color', mycolor, 'LineWidth', 1);
 
 axis equal
 ylim([0, 0.35]);
-xlim([-1,0]);
+xlim([-0.5,0.5]);
 xlabel('$a$','Interpreter','LaTex','FontSize',15);
 ylabel('$b$','Interpreter','LaTex','FontSize',15);
 box on;

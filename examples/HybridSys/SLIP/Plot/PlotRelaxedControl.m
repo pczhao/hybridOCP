@@ -161,6 +161,7 @@ y_dot_hist      = state_hist(:,8);
 mode_hist       = state_hist(:,9);
 
 %% Plot the control
+umax = params.umax;
 u_hist = 0 * t_hist;
 for i = 1 : length(t_hist)
     if ~isnan(l_hist(i))
@@ -187,9 +188,6 @@ PlotFrame_helper;
 cost = 0;
 for i = 1 : length(t_hist)-1
     if (t_hist(i) > 1)
-        break;
-    end
-    if (x_hist(i) > 0)
         break;
     end
     

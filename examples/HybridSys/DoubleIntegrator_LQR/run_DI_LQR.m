@@ -1,13 +1,15 @@
-% Double integrator with 2 modes - minimum time problem
-% xdot = [ x_2 ] + [ 0 ] * u
+% Double integrator with 2 modes - LQR problem
+% xdot = [ x2 ] + [ 0 ] * u
 %        [ 0   ]   [ 1 ]
 % 
 % u(t) \in [-1, 1]
-% X_1 = { x | x_1^2 + x_2^2 <= r2 }
-% X_2 = { x | x_1^2 + x_2^2 >= r2 }
-% XT_1 = {(0,0)}
-% XT_2 = {empty}
-% h = 1, H = 0
+% X_1 = [0.5, 2] x [-1, 1]
+% X_2 = [-1, 0.5] x [-1, 1]
+% G(1->2) = {0.5} x [-1, 1]\[-1e-3,1e-3]
+% XT_1 = [0.5+1e-3, 2] x [-1, 1]
+% XT_2 = X_2
+% h = x1^2 + x2^2 + 20 * u^2
+% H = 0
 % 
 % Trajectory starts at (1,1) in mode 2, and minimizes the running cost
 % h = x'*x + 20 * u^2 up to time T
@@ -17,7 +19,6 @@ clear;
 T = 15;          % time horizon
 d = 6;          % degree of relaxation
 nmodes = 2;     % number of modes
-r2 = 0.3;       % r^2, where r is the radius of the domain of mode 1
 
 % Define variables
 t = msspoly( 't', 1 );
@@ -34,7 +35,7 @@ R = cell( nmodes, nmodes );
 h = cell( nmodes, 1 );
 H = cell( nmodes, 1 );
 
-x0{2} = [ 1; 1 ];
+x0{1} = [ 1; 1 ];
 
 % Dynamics
 x{1} = msspoly( 'x', 2 );
@@ -50,25 +51,37 @@ g{2} = g{1};
 % Domains
 % Mode 1 
 y = x{1};
-hX{1} = r2 - y'*y;
+hX{1} = [ ...
+    2 - y(1);
+    y(1) - 0.5;
+    1 - y(2)^2 ];
 hU{1} = 1 - u{1}^2;
-hXT{1} = hX{1};
+hXT{1} = [ ...
+    2 - y(1);
+    y(1) - 0.5 - 1e-3;
+    1 - y(2)^2 ];
+sX{1,2} = [ ...
+    y(1) - 0.5;
+    0.5 - y(1);
+    1 - y(2)^2;
+    y(2)^2 - 1e-6 ];
+R{1,2} = y;
 h{1} = 1*x{1}' * x{1} + 20 * u{1}^2;
 H{1} = 0;
 
 % Mode 2
 y = x{2};
-hX{2} = y'*y - r2;
+hX{2} = [ ...
+    0.5 - y(1);
+    y(1) + 1;
+    1 - y(2)^2 ];
 hU{2} = 1 - u{2}^2;
 hXT{2} = hX{2};
-sX{2,1} = [ r2 - y' * y;
-            y' * y - r2 ];
-R{2,1} = x{1};
 h{2} = 1*x{2}' * x{2} + 20 * u{2}^2;
 H{2} = 0;
 
 % Options
-options.MinimumTime = 0;
+options.freeFinalTime = 0;
 options.withInputs = 1;
 options.svd_eps = 1e4;
 
@@ -76,28 +89,23 @@ options.svd_eps = 1e4;
 [out] = HybridOCPDualSolver(t,x,u,f,g,hX,hU,sX,R,x0,hXT,h,H,d,options);
 
 pval = T * out.pval;
-disp(['LMI ' int2str(d) ' lower bound = ' num2str(pval)]);
 
 %% Plot
-xs0 = x0{2};
+xs0 = x0{1};
 figure;
 hold on;
 box on;
 
 % Domain
-th = 0:0.01:2*pi;
-circx = sqrt(r2) * cos(th);
-circy = sqrt(r2) * sin(th);
-plot(circx, circy, 'k');
+plot([0.5, 0.5], [-1, 1], 'k');
 
 % Integrate forward trajectory
 controller = [ out.u{1}; out.u{2} ];
-J = @(xx, uu) xx'*xx + 20 * uu^2;
-[ tval, xval ] = ode45(@(tt,xx) T * Hybrid_DIEq( tt, xx, controller, J, [t;x{1}] ), ...
-                       [0:0.01:1], [xs0; 0] );
+[ tval, xval ] = ode45(@(tt,xx) T * Hybrid_DIEq( tt, xx, controller, [t;x{1}] ), ...
+                       [0:0.001:1], [xs0] );
 h_traj = plot(xval(:,1), xval(:,2),'LineWidth',2);
 
-plot(x0{2}(1),x0{2}(2),'Marker','o','MarkerEdgeColor',[0 0.4470 0.7410]);
+plot(x0{1}(1),x0{1}(2),'Marker','o','MarkerEdgeColor',[0 0.4470 0.7410]);
 plot(0,0,'Marker','x','MarkerEdgeColor',[0 0.4470 0.7410]);
 xlim([-1,2]);
 ylim([-1,1]);
@@ -113,7 +121,7 @@ figure;
 hold on;
 uval = zeros( size(tval) );
 for i = 1 : length(tval)
-    if (xval(i,1:2)'*xval(i,1:2) <= r2)
+    if (xval(i,1) >= 0.5)
         uval(i) = double(subs(controller(1), [t;x{1}], [tval(i);xval(i,1:2)']));
     else
         uval(i) = double(subs(controller(2), [t;x{1}], [tval(i);xval(i,1:2)']));
@@ -122,3 +130,11 @@ end
 plot(tval*T, uval,'Linewidth',2);
 
 xlim([0,T]);
+
+
+integrand = xval(:,1).^2 + xval(:,2).^2 + 20 * uval(:).^2;
+cost = T * sum( integrand(1:end-1) .* diff(tval) );
+
+disp(['Computation time = ' num2str(out.time)]);
+disp(['LMI ' int2str(d) ' lower bound = ' num2str(pval)]);
+disp(['Cost from simulation = ' num2str(cost)]);
